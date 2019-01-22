@@ -12,6 +12,8 @@
 #include<sys/types.h>
 #include<arpa/inet.h>
 #include<fcntl.h>
+#include<map>
+#include<netdb.h>
 using namespace std;
 
 #define __TRACE__
