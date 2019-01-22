@@ -6,6 +6,12 @@
 #include<stdio.h>
 #include<unistd.h>
 #include<stdlib.h>
+#include<stdarg.h>
+#include<sys/epoll.h>
+#include<sys/socket.h>
+#include<sys/types.h>
+#include<arpa/inet.h>
+#include<fcntl.h>
 using namespace std;
 
 #define __TRACE__
