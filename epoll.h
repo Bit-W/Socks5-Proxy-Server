@@ -19,8 +19,8 @@ class EpollServer
 		void OPEvent(int fd,int events,int op)
 		{
 			struct epoll_event ev;
-			ev.data.fd = events;
-			ev.events = fd;
+			ev.data.fd = fd;
+			ev.events = events;
 			int ret = epoll_ctl(_eventfd,op,fd,&ev);
 			if(ret < 0)
 			{
@@ -30,13 +30,13 @@ class EpollServer
 		}
 		void SetNonblocking(int sfd)
 		{
-			int flags, s;
-			flags = fcntl (sfd, F_GETFL, 0);
+	 	
+			int flags = fcntl (sfd, F_GETFL, 0);
 			if (flags == -1)
 				ErrorLog("SetNonblocking:F_GETFL");
 
 			flags |= O_NONBLOCK;
-			s = fcntl (sfd, F_SETFL, flags);
+		        int s = fcntl (sfd, F_SETFL, flags);
 			if (s == -1)
 				ErrorLog("SetNonblocking:F_SETFL");
 
@@ -66,8 +66,10 @@ class EpollServer
                     Socks5State _state;
                     Channel _clientchannel;   //管道
                     Channel _serverchannel;   //管道
+                    int _ref;
                     Connect()
                       :_state(AUTH)
+                      ,_ref(0)
                     {
                     }
                 };

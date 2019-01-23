@@ -14,6 +14,7 @@
 #include<fcntl.h>
 #include<map>
 #include<netdb.h>
+#include<assert.h>
 using namespace std;
 
 #define __TRACE__

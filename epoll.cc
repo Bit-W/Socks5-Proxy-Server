@@ -11,6 +11,7 @@ void EpollServer::Start()
 	}
 	//2.绑定地址
 	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
 	size_t len = sizeof(addr);
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(_port);
@@ -23,13 +24,14 @@ void EpollServer::Start()
 	}
 
 	//监听
-	if(listen(_listenfd,5) < 0)
+	if(listen(_listenfd,100000) < 0)
 	{
 		ErrorLog("listen socket error");
 		exit(2);
 	}
 
 	TraceLog("epoll sever listen on %d",_port);
+	TraceLog("epoll sever listen on %d",_listenfd);
 	_eventfd = epoll_create(100000);
 	if(_eventfd < 0)
 	{
@@ -37,11 +39,12 @@ void EpollServer::Start()
 		exit(3);
 	}
         
-        //设置非阻塞   
-	SetNonblocking(_listenfd);
 	
 	//添加事件  epoll_ctl
 	OPEvent(_listenfd,EPOLLIN,EPOLL_CTL_ADD);
+
+        //设置非阻塞   
+	SetNonblocking(_listenfd);
 
 	//进入事件循环
 	EventLoop();
@@ -57,25 +60,22 @@ void EpollServer::EventLoop()
 	while(1) 
 	{
 		int ret = epoll_wait(_eventfd,evs,100000,0);
-		if(ret < 0)
-		{
-			ErrorLog("epoll_wait");
-			continue;
-		}
-		if(ret == 0)
-		{
-			TraceLog("epoll_wait timeout");
-                        continue;
-		}
+                if(ret < 0 )
+                {
+                     ErrorLog("epoll_wait");
+                }
 
-		for(int i = 0;i < 100000;++i)
+		for(int i = 0;i < ret + 1;++i)
 		{
+                       // cout<<"listen="<<_listenfd<<endl;
+                        // cout<<"evs[i]"<<evs[i].data.fd<<endl;
+                         
 			//请求的新连接
 			if(evs[i].data.fd == _listenfd)
 			{
 				struct sockaddr_in peer;
 				socklen_t  len = sizeof(peer);
-				int newaccept = accept(evs[i].data.fd,(struct sockaddr*)&peer,&len);
+				int newaccept = accept(_listenfd,(struct sockaddr*)&peer,&len);
 				if(newaccept < 0)
 				{
 					ErrorLog("accept false");
