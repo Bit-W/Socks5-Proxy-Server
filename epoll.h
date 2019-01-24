@@ -1,6 +1,19 @@
+#ifndef __EPOLL_H__
 #define __EPOLL_H__
-#ifdef __EPOLL_H__
 #include"common.h"
+
+//信号处理忽略信号
+class IgnoreSigPipe
+{
+public:
+	IgnoreSigPipe()
+	{
+		::signal(SIGPIPE, SIG_IGN);
+	}
+};
+
+static IgnoreSigPipe initPIPE_IGN;
+
 class EpollServer
 {
 	public:
@@ -28,15 +41,16 @@ class EpollServer
 				exit(4);
 			}
 		}
+                //非阻塞设置
 		void SetNonblocking(int sfd)
 		{
-	 	
+
 			int flags = fcntl (sfd, F_GETFL, 0);
 			if (flags == -1)
 				ErrorLog("SetNonblocking:F_GETFL");
 
 			flags |= O_NONBLOCK;
-		        int s = fcntl (sfd, F_SETFL, flags);
+			int s = fcntl (sfd, F_SETFL, flags);
 			if (s == -1)
 				ErrorLog("SetNonblocking:F_SETFL");
 
@@ -51,33 +65,37 @@ class EpollServer
 		};
 
 		//建立结构
-                struct Channel
-                {
-                  int _fd;
+		struct Channel
+		{
+			int _fd;   //描述符
+			string _buff;  //写缓冲
 
-                  Channel()
-                     :_fd(-1)
-                  {             
-                  }
-                };
+			Channel()
+				:_fd(-1)
+			{             
+			}
+		};
 
-                struct Connect
-                {
-                    Socks5State _state;
-                    Channel _clientchannel;   //管道
-                    Channel _serverchannel;   //管道
-                    int _ref;
-                    Connect()
-                      :_state(AUTH)
-                      ,_ref(0)
-                    {
-                    }
-                };
-
+		struct Connect
+		{
+			Socks5State _state;
+			Channel _clientchannel;   //管道
+			Channel _serverchannel;   //管道
+			int _ref;
+			Connect()
+				:_state(AUTH)
+				 ,_ref(0)
+			{
+			}
+		};
+ 
+               void SendInLoop(int fd,const char* arr,int len);
+               void RemoveConnect(int fd);
+               void Forwarding(Channel* clientchannel,Channel* serverchannel);
 		//多态实现的虚函数（实现复用）可以减少代码的冗余，让代码都在子类中实现
 		virtual void ConnectEventHandler(int newaccept) = 0;
 		virtual void ReadEventHandler(int newaccept) = 0;
-		virtual void WriteEventHandler(int newaccept) = 0;
+		virtual void WriteEventHandler(int newaccept);
 		void Start();
 		void EventLoop();
 

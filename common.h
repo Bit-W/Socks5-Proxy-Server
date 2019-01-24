@@ -1,5 +1,5 @@
+#ifndef __COMMON_H__
 #define __COMMON_H__
-#ifdef __COMMON_H__
 
 #include<iostream>
 #include<string.h>
@@ -15,6 +15,8 @@
 #include<map>
 #include<netdb.h>
 #include<assert.h>
+#include<signal.h>
+#include<errno.h>
 using namespace std;
 
 #define __TRACE__

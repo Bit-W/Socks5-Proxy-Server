@@ -23,6 +23,7 @@ int Socks5Server::AuthHandler(int fd)
 			ErrorLog("not soks5");
 			return -1;
 		}
+                TraceLog("AuthHandler  len = %d",len);
 		return 1;
 	}
 }
@@ -52,8 +53,8 @@ int Socks5Server::EstablishmentHandle(int fd)
 		if(buf[3] == 0x01)
 		{
 			//ipv4            
-			recv(fd,ip,4,0);
-			recv(fd,port,2,0);
+		       recv(fd,ip,4,0);
+		       recv(fd,port,2,0);
 
 		}
 		else if(buf[3] == 0x03)
@@ -68,6 +69,8 @@ int Socks5Server::EstablishmentHandle(int fd)
 			TraceLog("Address:%s",buf);
 			TraceLog("port:%d",port);
 			//和前面的分隔开
+
+                        //获取域名
 			struct  hostent* DNS = gethostbyname(buf);
 			memcpy(ip, DNS->h_addr, DNS->h_length);
 
@@ -85,8 +88,9 @@ int Socks5Server::EstablishmentHandle(int fd)
 		}
 
 		struct sockaddr_in addr;
-		memset(&addr, 0, sizeof(struct sockaddr_in));
+	//	memset(&addr, 0, sizeof(struct sockaddr_in));
 		addr.sin_family = AF_INET;
+                TraceLog("ip buff %s",ip);
 		memcpy(&addr.sin_addr.s_addr, ip, 4);
 		addr.sin_port = *((uint16_t*)port);
 
@@ -104,85 +108,36 @@ int Socks5Server::EstablishmentHandle(int fd)
 			close(serverfd);
 			return -1;
 		}
-
 		return serverfd;
 
 	}
-
-
 }
 
-
-void Socks5Server::RemoveConnect(int fd)
-{
-   OPEvent(fd,EPOLLIN,EPOLL_CTL_DEL);
-   auto it = _fdConnectMap.find(fd);
-   Connect* con = it->second;
-    
-   if(it != _fdConnectMap.end()) 
-   {
-      if(--(con->_ref) == 0)
-       {
-          delete con;
-          _fdConnectMap.erase(it);
-       }
-   }
-   else
-   {
-       assert(false);
-   }
-}
-
-
-void Socks5Server::Forwarding(Channel* clientchannel,Channel* serverchannel)
-{
-     char arr[4096];
-     int len = recv(clientchannel->_fd,arr,4096,0);
-     TraceLog("recv->%d",len);
-     if(len < 0)
-     {
-       ErrorLog("recv error");
-       exit(7);
-     }
-    if(len == 0)
-    {
-      TraceLog("port close");
-      shutdown(serverchannel->_fd,SHUT_WR);
-      RemoveConnect(clientchannel->_fd);
-    }
-    else
-    {           //转发数据
-         if(send(serverchannel->_fd,arr,len,0) < 0)
-           ErrorLog("send  is error");
-    }
-
-}
-//处理新的连接请求
 void Socks5Server::ConnectEventHandler(int newaccept)
 {
+	TraceLog("new conenct event:%d", newaccept);
 
-	OPEvent(newaccept,EPOLLIN,EPOLL_CTL_ADD);
+	// 添加connectfd到epoll，监听读事件
 	SetNonblocking(newaccept);
+	OPEvent(newaccept, EPOLLIN, EPOLL_CTL_ADD);
 
 	Connect* con = new Connect;
 	con->_state = AUTH;
 	con->_clientchannel._fd = newaccept;
 	_fdConnectMap[newaccept] = con;
-        cout<<"Connect size = "<<_fdConnectMap.size()<<endl;
-        con-> _ref++;
-
+	con->_ref++;
 }
 
 //处理读事件
 void Socks5Server::ReadEventHandler(int newaccept)
 {
 	//判断是什么状态
-//	map<int, Connect*>::iterator it = _fdConnectMap.find(newaccept);
+	//	map<int, Connect*>::iterator it = _fdConnectMap.find(newaccept);
 	auto it = _fdConnectMap.find(newaccept);
 	if(it != _fdConnectMap.end())
 	{
-                 
-        	Connect* con = it->second;
+
+		Connect* con = it->second;
 		if(con->_state == AUTH)
 		{
 			char reply[2];
@@ -203,7 +158,7 @@ void Socks5Server::ReadEventHandler(int newaccept)
 				RemoveConnect(newaccept);
 				TraceLog("recv the socks5 success");
 			}  
-                        //代理商对客户端的回复 
+			//代理商对客户端的回复 
 			if(send(newaccept,reply,2,0) < 0)
 			{
 				ErrorLog("reply error");
@@ -211,59 +166,53 @@ void Socks5Server::ReadEventHandler(int newaccept)
 		}
 		else if(con->_state == ESTABLISHMENT)
 		{      
-                        //建立连接并且，客户端对代理服务器发送请求信息 
+			//建立连接并且，客户端对代理服务器发送请求信息 
 			char reply[10];
 			reply[0] = 0x05;
-			int ret = EstablishmentHandle(newaccept);
-                        
+			int ret = EstablishmentHandle(newaccept);                                //有问题发送不出去
 			if(ret == -2)
 			{
 				return;
 			}
 			if(ret >= 0)
 			{       
-                                reply[1] = 0x00;
+				reply[1] = 0x00;
 				reply[3] = 0x03;
+				SetNonblocking(ret);
+				OPEvent(ret,EPOLLIN,EPOLL_CTL_ADD);
+				con->_serverchannel._fd = ret;
+				_fdConnectMap[ret] = con;
+				con->_state = FORWARDING;
+				con->_ref++;
 			}
 			if(ret == -1)
 			{
 				reply[1] = 0x01;   //关闭连接
 				RemoveConnect(newaccept);
 			}
-                         //代理商对客户端发起回复
-                        if(send(newaccept,reply,10,0) != 10)
-                          {
-                               ErrorLog("establishment reply");
-                          }
+			//代理商对客户端发起回复
+			if(send(newaccept,reply,10,0) != 10)
+			{
+				ErrorLog("establishment reply");
+			}
 
-			SetNonblocking(ret);
-			OPEvent(ret,EPOLLIN,EPOLL_CTL_ADD);
-			con->_serverchannel._fd = ret;
-			_fdConnectMap[ret] = con;
-			con->_state = FORWARDING;
-                       con->_ref++;
 
 
 		}
 		else if(con->_state == FORWARDING)
 		{
-                   //代理商对goole请求转发
-                   //goole对代理商进行回复
-                   Channel* clinetchannel = &con->_clientchannel;
-                   Channel* serverchannel = &con->_serverchannel;
-                   if(newaccept == serverchannel->_fd)
-                    {
-                      swap(clinetchannel,serverchannel);
-                    }
-                    
-                   Forwarding(clinetchannel,serverchannel);
+			//代理商对goole请求转发
+			//goole对代理商进行回复
+			Channel* clinetchannel = &con->_clientchannel;
+			Channel* serverchannel = &con->_serverchannel;
+			if(newaccept == serverchannel->_fd)
+			{
+				swap(clinetchannel,serverchannel);
+			}
+
+			Forwarding(clinetchannel,serverchannel);
 		}
 	}
-}
-
-void Socks5Server:: WriteEventHandler(int newaccept)
-{
-	//TraceLog("write");
 }
 
 

@@ -1,4 +1,103 @@
 #include"epoll.h"
+
+void EpollServer::RemoveConnect(int fd)
+{
+	OPEvent(fd,0,EPOLL_CTL_DEL);
+	auto it = _fdConnectMap.find(fd);
+	Connect* con = it->second;
+	if(it != _fdConnectMap.end()) 
+	{
+		if(--con->_ref == 0)
+		{
+			delete con;
+			_fdConnectMap.erase(it);
+		}
+	}
+	else
+	{
+		assert(false);
+	}
+}
+void EpollServer::SendInLoop(int fd,const char* arr,int len)
+{
+	int slen = send(fd,arr,len,0);
+       // TraceLog("SendInLoop slen = %d",slen);
+	if(slen < 0)
+	{
+		ErrorLog("send error slen = %d",slen);
+	}
+	else if(slen < len)
+	{
+		//没有转发完的，首先保存在string _buff中在利用写事件将数据转发完
+		auto it = _fdConnectMap.find(fd);
+		if(it != _fdConnectMap.end())
+		{
+			Connect* con = it->second;
+			Channel* channel = &con->_clientchannel;;
+			if(fd == con->_serverchannel._fd)
+			{
+				channel = &con->_serverchannel;
+			}
+
+			int events = EPOLLOUT | EPOLLIN | EPOLLONESHOT;
+			OPEvent(fd,events,EPOLL_CTL_MOD);
+
+			channel->_buff.append(arr + slen);
+
+		}
+		else
+		{
+			assert(false);
+		}
+	}
+}
+
+//转发
+void EpollServer::Forwarding(Channel* clientchannel,Channel* serverchannel)
+{
+	char arr[4096];
+	int len = recv(clientchannel->_fd,arr,4096,0);
+	TraceLog("recv->%d",len);
+	if(len < 0)
+	{
+		ErrorLog("recv error");
+		exit(7);
+	}
+	if(len == 0)
+	{
+		TraceLog("port close");
+		//发起关闭
+		shutdown(serverchannel->_fd,SHUT_WR);
+		RemoveConnect(clientchannel->_fd);
+	}
+	else
+	{
+		//转发数据  客户端到服务器（直接交换，不用分开考虑）
+		arr[len] = '\0';
+		SendInLoop(serverchannel->_fd,arr,len);
+	}
+
+}
+
+void EpollServer:: WriteEventHandler(int newaccept)
+{
+	auto it = _fdConnectMap.find(newaccept);
+	if(it != _fdConnectMap.end())
+	{
+		Connect* con = it->second;
+		Channel* channel = &con->_clientchannel;
+		if(newaccept == con->_serverchannel._fd)
+		{
+			channel = &con->_serverchannel;
+		}
+		string buff;
+		buff.swap(channel->_buff);
+		SendInLoop(newaccept,buff.c_str(),buff.size());
+	}
+
+
+}
+
 void EpollServer::Start()
 {
 	//TCP编程
