@@ -53,7 +53,7 @@ void EpollServer::SendInLoop(int fd,const char* arr,int len)
 }
 
 //转发
-void EpollServer::Forwarding(Channel* clientchannel,Channel* serverchannel)
+void EpollServer::Forwarding(Channel* clientchannel,Channel* serverchannel,bool sendencry,bool recvencry)
 {
 	char arr[4096];
 	int len = recv(clientchannel->_fd,arr,4096,0);
@@ -72,6 +72,14 @@ void EpollServer::Forwarding(Channel* clientchannel,Channel* serverchannel)
 	}
 	else
 	{
+                if(sendencry)
+                {
+                   Decrypt(arr,len);
+                }
+                if(recvencry)
+                {
+                   Decrypt(arr,len);
+                }
 		//转发数据  客户端到服务器（直接交换，不用分开考虑）
 		arr[len] = '\0';
 		SendInLoop(serverchannel->_fd,arr,len);

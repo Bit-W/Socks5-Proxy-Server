@@ -1,7 +1,7 @@
 #ifndef __EPOLL_H__
 #define __EPOLL_H__
 #include"common.h"
-
+#include"encry.h"
 //信号处理忽略信号
 class IgnoreSigPipe
 {
@@ -91,7 +91,7 @@ class EpollServer
  
                void SendInLoop(int fd,const char* arr,int len);
                void RemoveConnect(int fd);
-               void Forwarding(Channel* clientchannel,Channel* serverchannel);
+               void Forwarding(Channel* clientchannel,Channel* serverchannel,bool sendencry,bool recvencry);
 		//多态实现的虚函数（实现复用）可以减少代码的冗余，让代码都在子类中实现
 		virtual void ConnectEventHandler(int newaccept) = 0;
 		virtual void ReadEventHandler(int newaccept) = 0;

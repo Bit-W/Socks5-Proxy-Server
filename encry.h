@@ -2,7 +2,7 @@
 #define __ENCRY_H__
 
 //加密算法
-tatic inline char* XOR(char* buf, size_t len)
+static inline char* XOR(char* buf, size_t len)
 {
 	for (size_t i = 0; i < len; ++i)
 	{

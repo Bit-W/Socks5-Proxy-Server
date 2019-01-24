@@ -40,11 +40,14 @@ void TranferServer::ReadEventHandler(int newaccept)
 		Channel* serverchannel = &con->_serverchannel;
 	if(it != _fdConnectMap.end())
 	{
-		if(newaccept == con->_serverchannel._fd)
-		{
-			swap(clientchannel,serverchannel);
-		}
-		Forwarding(clientchannel,serverchannel);
+                        bool sendencry = true;     //解密
+                        bool recvencry = false;    //解密
+			if(newaccept == serverchannel->_fd)
+			{
+				swap(clientchannel,serverchannel);
+                                swap(sendencry,recvencry);
+			}
+			Forwarding(clientchannel,serverchannel,sendencry,recvencry);
 	}
 	else
 	{

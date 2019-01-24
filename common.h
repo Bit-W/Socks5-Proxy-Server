@@ -17,6 +17,7 @@
 #include<assert.h>
 #include<signal.h>
 #include<errno.h>
+#include<stdbool.h>
 using namespace std;
 
 #define __TRACE__

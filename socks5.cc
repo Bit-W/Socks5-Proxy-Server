@@ -17,7 +17,9 @@ int Socks5Server::AuthHandler(int fd)
 	}
 	else
 	{
+                
 		recv(fd,buf,len,0);
+                Decrypt(buf,len);      //在解析头之前必须解密
 		if(buf[0] != 0x05)
 		{ 
 			ErrorLog("not soks5");
@@ -50,11 +52,14 @@ int Socks5Server::EstablishmentHandle(int fd)
 	else if(len >= 10)
 	{
 		recv(fd,buf,4,0);
+                Decrypt(buf,4);      //在解析头之前必须解密
 		if(buf[3] == 0x01)
 		{
 			//ipv4            
 		       recv(fd,ip,4,0);
+                       Decrypt(ip,4);
 		       recv(fd,port,2,0);
+                       Decrypt(port,2);
 
 		}
 		else if(buf[3] == 0x03)
@@ -62,15 +67,23 @@ int Socks5Server::EstablishmentHandle(int fd)
 			//域名
 			char len = 0;
 			recv(fd,&len,1,0);
+                        Decrypt(&len,1);
 			recv(fd,buf,len,0);   //这一步看不太懂
+                        Decrypt(buf,len);
+                                          
 			buf[len] = '\0';
 
 			recv(fd,port,2,0);
+                        
+                        TraceLog("encry domainname = %s",buf);
+                        Decrypt(port,2);    //解密
 			TraceLog("Address:%s",buf);
 			TraceLog("port:%d",port);
 			//和前面的分隔开
 
+                        TraceLog("encry domainname = %s",buf);
                         //获取域名
+                        TraceLog("Estab buf = %s",buf);
 			struct  hostent* DNS = gethostbyname(buf);
 			memcpy(ip, DNS->h_addr, DNS->h_length);
 
@@ -157,9 +170,10 @@ void Socks5Server::ReadEventHandler(int newaccept)
 				reply[1] == 0xFF;
 				RemoveConnect(newaccept);
 				TraceLog("recv the socks5 success");
-			}  
+			} 
+                        Encry(reply,2);   //必须加密 
 			//代理商对客户端的回复 
-			if(send(newaccept,reply,2,0) < 0)
+			if(send(newaccept,reply,2,0) !=  0)
 			{
 				ErrorLog("reply error");
 			}
@@ -190,6 +204,7 @@ void Socks5Server::ReadEventHandler(int newaccept)
 				reply[1] = 0x01;   //关闭连接
 				RemoveConnect(newaccept);
 			}
+                        Encry(reply,10);  //加密
 			//代理商对客户端发起回复
 			if(send(newaccept,reply,10,0) != 10)
 			{
@@ -205,12 +220,15 @@ void Socks5Server::ReadEventHandler(int newaccept)
 			//goole对代理商进行回复
 			Channel* clinetchannel = &con->_clientchannel;
 			Channel* serverchannel = &con->_serverchannel;
+
+                        bool sendencry = false;     //解密
+                        bool recvencry = true;    //解密
 			if(newaccept == serverchannel->_fd)
 			{
 				swap(clinetchannel,serverchannel);
+                                swap(sendencry,recvencry);
 			}
-
-			Forwarding(clinetchannel,serverchannel);
+			Forwarding(clinetchannel,serverchannel,sendencry,recvencry);
 		}
 	}
 }
